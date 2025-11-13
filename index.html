@@ -1,0 +1,184 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Bootstrap Download</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .download-card {
+            max-width: 500px;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(0,0,0,.125);
+            box-shadow: 0 0.5rem 1rem rgba(0,0,0,.05);
+        }
+        .file-info {
+            background-color: #f8f9fa;
+            border-radius: 0.375rem;
+        }
+    </style>
+</head>
+<body class="d-flex justify-content-center align-items-center min-vh-100 p-3">
+    <div class="download-card card text-center">
+        <div class="card-body p-4">
+            <div class="mb-4">
+                <i class="bi bi-download text-success" style="font-size: 3rem;"></i>
+                <h1 class="h3 card-title mt-2">Download Bootstrap Locally</h1>
+                <p class="text-muted">Get the compiled CSS and JS files for your project</p>
+            </div>
+            
+            <div class="file-info card mb-4 text-start">
+                <div class="card-body p-3">
+                    <div class="d-flex mb-2">
+                        <i class="bi bi-file-earmark-zip text-primary me-2"></i>
+                        <div>
+                            <strong>File name:</strong> bootstrap-5.3.8-dist.zip
+                        </div>
+                    </div>
+                    <div class="d-flex mb-2">
+                        <i class="bi bi-hdd text-primary me-2"></i>
+                        <div>
+                            <strong>Size:</strong> ~1.5 MB
+                        </div>
+                    </div>
+                    <div class="d-flex">
+                        <i class="bi bi-check-circle text-primary me-2"></i>
+                        <div>
+                            <strong>Contents:</strong> Clean Bootstrap files only
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="downloadBtn" class="btn btn-success btn-lg px-4 mb-3">
+                <i class="bi bi-download me-2"></i> <span id="btnText">Download Bootstrap ZIP</span>
+            </button>
+            
+            <div id="loadingSpinner" class="d-none mb-3">
+                <div class="spinner-border text-success" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted small mt-2">Creating clean Bootstrap ZIP...</p>
+            </div>
+            
+            <p class="text-muted small mt-3 mb-0">
+                Download clean Bootstrap CSS and JS files only (no custom files).
+            </p>
+        </div>
+        <div class="card-footer text-muted small">
+            v5.3.8 · <a href="https://getbootstrap.com/" class="text-decoration-none">Official Website</a>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- JSZip for creating ZIP files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    <script>
+        const downloadBtn = document.getElementById('downloadBtn');
+        const btnText = document.getElementById('btnText');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        
+        // Bootstrap 5.3.8 CDN URLs - Clean Bootstrap files only
+        const bootstrapVersion = '5.3.8';
+        const bootstrapFiles = {
+            // CSS files
+            'css/bootstrap.min.css': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap.min.css`,
+            'css/bootstrap.css': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap.css`,
+            'css/bootstrap.min.css.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap.min.css.map`,
+            'css/bootstrap.css.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap.css.map`,
+            'css/bootstrap-grid.min.css': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap-grid.min.css`,
+            'css/bootstrap-grid.css': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap-grid.css`,
+            'css/bootstrap-grid.min.css.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap-grid.min.css.map`,
+            'css/bootstrap-grid.css.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap-grid.css.map`,
+            'css/bootstrap-reboot.min.css': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap-reboot.min.css`,
+            'css/bootstrap-reboot.css': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap-reboot.css`,
+            'css/bootstrap-reboot.min.css.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap-reboot.min.css.map`,
+            'css/bootstrap-reboot.css.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap-reboot.css.map`,
+            'css/bootstrap-utilities.min.css': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap-utilities.min.css`,
+            'css/bootstrap-utilities.css': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap-utilities.css`,
+            'css/bootstrap-utilities.min.css.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap-utilities.min.css.map`,
+            'css/bootstrap-utilities.css.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap-utilities.css.map`,
+            // JS files
+            'js/bootstrap.bundle.min.js': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/js/bootstrap.bundle.min.js`,
+            'js/bootstrap.bundle.js': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/js/bootstrap.bundle.js`,
+            'js/bootstrap.bundle.min.js.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/js/bootstrap.bundle.min.js.map`,
+            'js/bootstrap.bundle.js.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/js/bootstrap.bundle.js.map`,
+            'js/bootstrap.min.js': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/js/bootstrap.min.js`,
+            'js/bootstrap.js': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/js/bootstrap.js`,
+            'js/bootstrap.min.js.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/js/bootstrap.min.js.map`,
+            'js/bootstrap.js.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/js/bootstrap.js.map`,
+            'js/bootstrap.esm.min.js': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/js/bootstrap.esm.min.js`,
+            'js/bootstrap.esm.js': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/js/bootstrap.esm.js`,
+            'js/bootstrap.esm.min.js.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/js/bootstrap.esm.min.js.map`,
+            'js/bootstrap.esm.js.map': `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/js/bootstrap.esm.js.map`
+        };
+        
+        downloadBtn.addEventListener('click', async function() {
+            // Disable button and show loading
+            downloadBtn.disabled = true;
+            btnText.textContent = 'Preparing download...';
+            loadingSpinner.classList.remove('d-none');
+            
+            try {
+                const zip = new JSZip();
+                const cssFolder = zip.folder('css');
+                const jsFolder = zip.folder('js');
+                
+                // Fetch all Bootstrap files (clean files only, no injected files)
+                const fetchPromises = Object.entries(bootstrapFiles).map(async ([path, url]) => {
+                    try {
+                        const response = await fetch(url);
+                        if (response.ok) {
+                            const content = await response.blob();
+                            if (path.startsWith('css/')) {
+                                cssFolder.file(path.replace('css/', ''), content);
+                            } else if (path.startsWith('js/')) {
+                                jsFolder.file(path.replace('js/', ''), content);
+                            }
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to fetch ${path}:`, error);
+                    }
+                });
+                
+                await Promise.all(fetchPromises);
+                
+                // Generate ZIP file
+                btnText.textContent = 'Creating ZIP...';
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                
+                // Create download link
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `bootstrap-${bootstrapVersion}-dist.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                // Reset button
+                btnText.textContent = 'Download Bootstrap ZIP';
+                downloadBtn.disabled = false;
+                loadingSpinner.classList.add('d-none');
+                
+            } catch (error) {
+                console.error('Error creating ZIP:', error);
+                alert('Error downloading Bootstrap. Please try again.');
+                btnText.textContent = 'Download Bootstrap ZIP';
+                downloadBtn.disabled = false;
+                loadingSpinner.classList.add('d-none');
+            }
+        });
+    </script>
+</body>
+</html>
