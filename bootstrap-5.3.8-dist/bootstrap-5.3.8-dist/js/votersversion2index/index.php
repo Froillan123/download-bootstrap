@@ -99,6 +99,8 @@
  * The structure stays the same, just rename everything and add what you need!
  */
 
+// Start output buffering to prevent any output before redirects
+ob_start();
 session_start();
 date_default_timezone_set('Asia/Manila');
 
@@ -211,7 +213,23 @@ function createElectionTables($pdo) {
 // ============================================================================
 
 function redirect($url) {
-    header("Location: $url");
+    // Ensure no output before redirect
+    if (ob_get_level()) {
+        ob_end_clean();
+    }
+    // Build absolute URL if relative
+    if (strpos($url, 'http') !== 0) {
+        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'];
+        $script = $_SERVER['SCRIPT_NAME'];
+        $base = dirname($script);
+        if ($base === '/' || $base === '\\' || $base === '.') {
+            $base = '';
+        }
+        $base = str_replace('/index.php', '', $base);
+        $url = $protocol . '://' . $host . $base . '/' . ltrim($url, '/');
+    }
+    header("Location: $url", true, 303); // 303 See Other - forces GET request, prevents POST resubmission
     exit;
 }
 
@@ -243,8 +261,12 @@ function requireAdmin() {
 $page = isset($_GET['page']) ? $_GET['page'] : 'login';
 $action = isset($_POST['action']) ? $_POST['action'] : '';
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
-$message = '';
-$messageType = '';
+
+// Get messages from session (for redirects)
+$message = $_SESSION['message'] ?? '';
+$messageType = $_SESSION['messageType'] ?? '';
+// Clear session messages after reading
+unset($_SESSION['message'], $_SESSION['messageType']);
 
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -338,12 +360,13 @@ function handlePositionAction($pdo, $action) {
         try {
             $stmt = $pdo->prepare("INSERT INTO positions (posName, numOfPositions, posStat) VALUES (?, ?, 'active')");
             $stmt->execute([$name, $numOfPositions]);
-            $message = "Position added successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Position added successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=positions");
     } elseif ($action == 'edit') {
         $id = (int)($_POST['posID'] ?? 0);
         $name = trim($_POST['posName'] ?? '');
@@ -352,36 +375,52 @@ function handlePositionAction($pdo, $action) {
         try {
             $stmt = $pdo->prepare("UPDATE positions SET posName = ?, numOfPositions = ? WHERE posID = ?");
             $stmt->execute([$name, $numOfPositions, $id]);
-            $message = "Position updated successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Position updated successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=positions");
     } elseif ($action == 'deactivate') {
         $id = (int)($_POST['posID'] ?? 0);
         
         try {
             $stmt = $pdo->prepare("UPDATE positions SET posStat = 'inactive' WHERE posID = ?");
             $stmt->execute([$id]);
-            $message = "Position deactivated successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Position deactivated successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=positions");
     } elseif ($action == 'activate') {
         $id = (int)($_POST['posID'] ?? 0);
         
         try {
             $stmt = $pdo->prepare("UPDATE positions SET posStat = 'active' WHERE posID = ?");
             $stmt->execute([$id]);
-            $message = "Position activated successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Position activated successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=positions");
+    } elseif ($action == 'delete') {
+        $id = (int)($_POST['posID'] ?? 0);
+        
+        try {
+            $stmt = $pdo->prepare("DELETE FROM positions WHERE posID = ?");
+            $stmt->execute([$id]);
+            $_SESSION['message'] = "Position deleted successfully!";
+            $_SESSION['messageType'] = 'success';
+        } catch(PDOException $e) {
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
+        }
+        redirect("?page=positions");
     }
 }
 
@@ -395,20 +434,22 @@ function handleCandidateAction($pdo, $action) {
         $posID = (int)($_POST['posID'] ?? 0);
         
         if (empty($fname) || empty($lname) || $posID == 0) {
-            $message = "First name, last name, and position are required.";
-            $messageType = 'danger';
+            $_SESSION['message'] = "First name, last name, and position are required.";
+            $_SESSION['messageType'] = 'danger';
+            redirect("?page=candidates");
             return;
         }
         
         try {
             $stmt = $pdo->prepare("INSERT INTO candidates (candFName, candMName, candLName, posID, candStat) VALUES (?, ?, ?, ?, 'active')");
             $stmt->execute([$fname, $mname, $lname, $posID]);
-            $message = "Candidate added successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Candidate added successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=candidates");
     } elseif ($action == 'edit') {
         $id = (int)($_POST['candID'] ?? 0);
         $fname = trim($_POST['candFName'] ?? '');
@@ -419,36 +460,52 @@ function handleCandidateAction($pdo, $action) {
         try {
             $stmt = $pdo->prepare("UPDATE candidates SET candFName = ?, candMName = ?, candLName = ?, posID = ? WHERE candID = ?");
             $stmt->execute([$fname, $mname, $lname, $posID, $id]);
-            $message = "Candidate updated successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Candidate updated successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=candidates");
     } elseif ($action == 'deactivate') {
         $id = (int)($_POST['candID'] ?? 0);
         
         try {
             $stmt = $pdo->prepare("UPDATE candidates SET candStat = 'inactive' WHERE candID = ?");
             $stmt->execute([$id]);
-            $message = "Candidate deactivated successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Candidate deactivated successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=candidates");
     } elseif ($action == 'activate') {
         $id = (int)($_POST['candID'] ?? 0);
         
         try {
             $stmt = $pdo->prepare("UPDATE candidates SET candStat = 'active' WHERE candID = ?");
             $stmt->execute([$id]);
-            $message = "Candidate activated successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Candidate activated successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=candidates");
+    } elseif ($action == 'delete') {
+        $id = (int)($_POST['candID'] ?? 0);
+        
+        try {
+            $stmt = $pdo->prepare("DELETE FROM candidates WHERE candID = ?");
+            $stmt->execute([$id]);
+            $_SESSION['message'] = "Candidate deleted successfully!";
+            $_SESSION['messageType'] = 'success';
+        } catch(PDOException $e) {
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
+        }
+        redirect("?page=candidates");
     }
 }
 
@@ -462,8 +519,9 @@ function handleVoterAction($pdo, $action) {
         $voterPass = $_POST['voterPass'] ?? '';
         
         if (empty($fname) || empty($lname) || empty($voterPass)) {
-            $message = "First name, last name, and password are required.";
-            $messageType = 'danger';
+            $_SESSION['message'] = "First name, last name, and password are required.";
+            $_SESSION['messageType'] = 'danger';
+            redirect("?page=voters");
             return;
         }
         
@@ -471,12 +529,13 @@ function handleVoterAction($pdo, $action) {
             $hashedPass = password_hash($voterPass, PASSWORD_DEFAULT);
             $stmt = $pdo->prepare("INSERT INTO voters (voterFName, voterMName, voterLName, voterPass, voterStat, voted) VALUES (?, ?, ?, ?, 'active', 0)");
             $stmt->execute([$fname, $mname, $lname, $hashedPass]);
-            $message = "Voter added successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Voter added successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=voters");
     } elseif ($action == 'edit') {
         $id = (int)($_POST['voterID'] ?? 0);
         $fname = trim($_POST['voterFName'] ?? '');
@@ -493,36 +552,52 @@ function handleVoterAction($pdo, $action) {
                 $stmt = $pdo->prepare("UPDATE voters SET voterFName = ?, voterMName = ?, voterLName = ? WHERE voterID = ?");
                 $stmt->execute([$fname, $mname, $lname, $id]);
             }
-            $message = "Voter updated successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Voter updated successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=voters");
     } elseif ($action == 'deactivate') {
         $id = (int)($_POST['voterID'] ?? 0);
         
         try {
             $stmt = $pdo->prepare("UPDATE voters SET voterStat = 'inactive' WHERE voterID = ?");
             $stmt->execute([$id]);
-            $message = "Voter deactivated successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Voter deactivated successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=voters");
     } elseif ($action == 'activate') {
         $id = (int)($_POST['voterID'] ?? 0);
         
         try {
             $stmt = $pdo->prepare("UPDATE voters SET voterStat = 'active' WHERE voterID = ?");
             $stmt->execute([$id]);
-            $message = "Voter activated successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Voter activated successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=voters");
+    } elseif ($action == 'delete') {
+        $id = (int)($_POST['voterID'] ?? 0);
+        
+        try {
+            $stmt = $pdo->prepare("DELETE FROM voters WHERE voterID = ?");
+            $stmt->execute([$id]);
+            $_SESSION['message'] = "Voter deleted successfully!";
+            $_SESSION['messageType'] = 'success';
+        } catch(PDOException $e) {
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
+        }
+        redirect("?page=voters");
     }
 }
 
@@ -848,6 +923,11 @@ function resetVotingSession($pdo) {
                                             <button type="submit">Activate</button>
                                         </form>
                                     <?php endif; ?>
+                                    <form method="post" style="display:inline;" onsubmit="return confirm('Permanently delete this position? This cannot be undone!')">
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="posID" value="<?= $pos['posID'] ?>">
+                                        <button type="submit">Delete</button>
+                                    </form>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -946,6 +1026,11 @@ function resetVotingSession($pdo) {
                                             <button type="submit">Activate</button>
                                         </form>
                                     <?php endif; ?>
+                                    <form method="post" style="display:inline;" onsubmit="return confirm('Permanently delete this candidate? This cannot be undone!')">
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="candID" value="<?= $cand['candID'] ?>">
+                                        <button type="submit">Delete</button>
+                                    </form>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -1067,6 +1152,11 @@ function resetVotingSession($pdo) {
                                             <button type="submit">Activate</button>
                                         </form>
                                     <?php endif; ?>
+                                    <form method="post" style="display:inline;" onsubmit="return confirm('Permanently delete this voter? This cannot be undone!')">
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="voterID" value="<?= $voter['voterID'] ?>">
+                                        <button type="submit">Delete</button>
+                                    </form>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
