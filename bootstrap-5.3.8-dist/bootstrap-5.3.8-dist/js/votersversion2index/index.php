@@ -764,6 +764,30 @@ function resetVotingSession($pdo) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voting System - Skills Test</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f4f4f4; }
+        nav { background: #0a2a43; color: #fff; padding: 12px; }
+        nav a, nav span { color: #fff; margin-right: 12px; text-decoration: none; font-weight: 600; }
+        nav a:hover { text-decoration: underline; }
+        hr { border: none; border-top: 1px solid #ccc; margin: 0; }
+        .container, .content-wrapper, body > div { padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; background: #fff; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #e5f1fb; }
+        button { padding: 6px 12px; margin: 2px; cursor: pointer; }
+        form.inline, form[style*="display:inline"] { display: inline; }
+        .card-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+        .card { background: #fff; padding: 15px; flex: 1 1 200px; border: 1px solid #ccc; border-radius: 4px; }
+        .message { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .message.success { background: #d1e7dd; color: #0f5132; }
+        .message.danger { background: #f8d7da; color: #842029; }
+        form input[type="text"], form input[type="email"], form input[type="number"], form input[type="password"], form input[type="datetime-local"], form select, form textarea {
+            width: 100%; padding: 6px; margin: 4px 0 10px 0; box-sizing: border-box;
+        }
+        form textarea { resize: vertical; }
+        .section-box { background:#fff; padding:15px; border:1px solid #ccc; border-radius:4px; margin-bottom:20px; }
+        .section-box h5 { margin-top:0; }
+    </style>
 </head>
 <body>
     <div>

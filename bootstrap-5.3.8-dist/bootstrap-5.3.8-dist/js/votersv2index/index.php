@@ -129,6 +129,8 @@
  * The structure stays the same, just rename everything and add what you need!
  */
 
+// Start output buffering to prevent any output before redirects
+ob_start();
 session_start();
 date_default_timezone_set('Asia/Manila');
 
@@ -264,7 +266,24 @@ function createElectionTables($pdo) {
 // ============================================================================
 
 function redirect($url) {
-    header("Location: $url");
+    // Ensure no output before redirect
+    if (ob_get_level()) {
+        ob_end_clean();
+    }
+    // Build absolute URL if relative
+    if (strpos($url, 'http') !== 0) {
+        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'];
+        $script = $_SERVER['SCRIPT_NAME'];
+        $base = dirname($script);
+        if ($base === '/' || $base === '\\' || $base === '.') {
+            $base = '';
+        }
+        // Remove index.php from base if present
+        $base = str_replace('/index.php', '', $base);
+        $url = $protocol . '://' . $host . $base . '/' . ltrim($url, '/');
+    }
+    header("Location: $url", true, 303); // 303 See Other - forces GET request, prevents POST resubmission
     exit;
 }
 
@@ -284,8 +303,12 @@ function getSettings($pdo) {
 $page = isset($_GET['page']) ? $_GET['page'] : 'admin';
 $action = isset($_POST['action']) ? $_POST['action'] : '';
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
-$message = '';
-$messageType = '';
+
+// Get messages from session (for redirects)
+$message = $_SESSION['message'] ?? '';
+$messageType = $_SESSION['messageType'] ?? '';
+// Clear session messages after reading
+unset($_SESSION['message'], $_SESSION['messageType']);
 
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -319,27 +342,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 // ============================================================================
 
 function handlePositionAction($pdo, $action) {
-    global $message, $messageType;
+    global $page;
     
     if ($action == 'add') {
         $name = trim($_POST['position_name'] ?? '');
         $max_winners = (int)($_POST['max_winners'] ?? 1);
         
         if (empty($name)) {
-            $message = "Position name is required.";
-            $messageType = 'danger';
+            $_SESSION['message'] = "Position name is required.";
+            $_SESSION['messageType'] = 'danger';
+            redirect("?page=positions");
             return;
         }
         
         try {
             $stmt = $pdo->prepare("INSERT INTO positions (position_name, max_winners) VALUES (?, ?)");
             $stmt->execute([$name, $max_winners]);
-            $message = "Position added successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Position added successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=positions");
     } elseif ($action == 'edit') {
         $id = (int)($_POST['position_id'] ?? 0);
         $name = trim($_POST['position_name'] ?? '');
@@ -348,12 +373,13 @@ function handlePositionAction($pdo, $action) {
         try {
             $stmt = $pdo->prepare("UPDATE positions SET position_name = ?, max_winners = ? WHERE position_id = ?");
             $stmt->execute([$name, $max_winners, $id]);
-            $message = "Position updated successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Position updated successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=positions");
     } elseif ($action == 'delete') {
         $id = (int)($_POST['position_id'] ?? 0);
         
@@ -362,44 +388,46 @@ function handlePositionAction($pdo, $action) {
             $stmt = $pdo->prepare("SELECT COUNT(*) FROM candidates WHERE position_id = ?");
             $stmt->execute([$id]);
             if ($stmt->fetchColumn() > 0) {
-                $message = "Cannot delete position with associated candidates.";
-                $messageType = 'danger';
+                $_SESSION['message'] = "Cannot delete position with associated candidates.";
+                $_SESSION['messageType'] = 'danger';
+                redirect("?page=positions");
                 return;
             }
             
             $stmt = $pdo->prepare("DELETE FROM positions WHERE position_id = ?");
             $stmt->execute([$id]);
-            $message = "Position deleted successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Position deleted successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=positions");
     }
 }
 
 function handleCandidateAction($pdo, $action) {
-    global $message, $messageType;
-    
     if ($action == 'add') {
         $name = trim($_POST['full_name'] ?? '');
         $position_id = (int)($_POST['position_id'] ?? 0);
         
         if (empty($name) || $position_id == 0) {
-            $message = "All fields are required.";
-            $messageType = 'danger';
+            $_SESSION['message'] = "All fields are required.";
+            $_SESSION['messageType'] = 'danger';
+            redirect("?page=candidates");
             return;
         }
         
         try {
             $stmt = $pdo->prepare("INSERT INTO candidates (full_name, position_id) VALUES (?, ?)");
             $stmt->execute([$name, $position_id]);
-            $message = "Candidate added successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Candidate added successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=candidates");
     } elseif ($action == 'edit') {
         $id = (int)($_POST['candidate_id'] ?? 0);
         $name = trim($_POST['full_name'] ?? '');
@@ -408,49 +436,51 @@ function handleCandidateAction($pdo, $action) {
         try {
             $stmt = $pdo->prepare("UPDATE candidates SET full_name = ?, position_id = ? WHERE candidate_id = ?");
             $stmt->execute([$name, $position_id, $id]);
-            $message = "Candidate updated successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Candidate updated successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=candidates");
     } elseif ($action == 'delete') {
         $id = (int)($_POST['candidate_id'] ?? 0);
         
         try {
             $stmt = $pdo->prepare("DELETE FROM candidates WHERE candidate_id = ?");
             $stmt->execute([$id]);
-            $message = "Candidate deleted successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Candidate deleted successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=candidates");
     }
 }
 
 function handleVoterAction($pdo, $action) {
-    global $message, $messageType;
-    
     if ($action == 'add') {
         $name = trim($_POST['full_name'] ?? '');
         $email = trim($_POST['email'] ?? '');
         
         if (empty($name) || empty($email)) {
-            $message = "All fields are required.";
-            $messageType = 'danger';
+            $_SESSION['message'] = "All fields are required.";
+            $_SESSION['messageType'] = 'danger';
+            redirect("?page=voters");
             return;
         }
         
         try {
             $stmt = $pdo->prepare("INSERT INTO users (full_name, email, password, role) VALUES (?, ?, ?, 'voter')");
             $stmt->execute([$name, $email, password_hash('password123', PASSWORD_DEFAULT)]);
-            $message = "Voter added successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Voter added successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=voters");
     } elseif ($action == 'edit') {
         $id = (int)($_POST['user_id'] ?? 0);
         $name = trim($_POST['full_name'] ?? '');
@@ -459,33 +489,34 @@ function handleVoterAction($pdo, $action) {
         try {
             $stmt = $pdo->prepare("UPDATE users SET full_name = ?, email = ? WHERE user_id = ? AND role = 'voter'");
             $stmt->execute([$name, $email, $id]);
-            $message = "Voter updated successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Voter updated successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=voters");
     } elseif ($action == 'delete') {
         $id = (int)($_POST['user_id'] ?? 0);
         
         try {
             $stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ? AND role = 'voter'");
             $stmt->execute([$id]);
-            $message = "Voter deleted successfully!";
-            $messageType = 'success';
+            $_SESSION['message'] = "Voter deleted successfully!";
+            $_SESSION['messageType'] = 'success';
         } catch(PDOException $e) {
-            $message = "Error: " . $e->getMessage();
-            $messageType = 'danger';
+            $_SESSION['message'] = "Error: " . $e->getMessage();
+            $_SESSION['messageType'] = 'danger';
         }
+        redirect("?page=voters");
     }
 }
 
 function handleVoteSubmission($pdo) {
-    global $message, $messageType;
-    
     if (empty($_POST['voter_id']) || empty($_POST['votes'])) {
-        $message = "Please select at least one candidate.";
-        $messageType = 'danger';
+        $_SESSION['message'] = "Please select at least one candidate.";
+        $_SESSION['messageType'] = 'danger';
+        redirect("?page=vote");
         return;
     }
     
@@ -497,8 +528,9 @@ function handleVoteSubmission($pdo) {
     $user = $stmt->fetch();
     
     if ($user && $user['has_voted']) {
-        $message = "You have already voted.";
-        $messageType = 'danger';
+        $_SESSION['message'] = "You have already voted.";
+        $_SESSION['messageType'] = 'danger';
+        redirect("?page=vote");
         return;
     }
     
@@ -535,25 +567,25 @@ function handleVoteSubmission($pdo) {
         $stmt->execute([$voter_id]);
         
         $pdo->commit();
-        $message = "Vote submitted successfully!";
-        $messageType = 'success';
+        $_SESSION['message'] = "Vote submitted successfully!";
+        $_SESSION['messageType'] = 'success';
     } catch(Exception $e) {
         $pdo->rollBack();
-        $message = "Error: " . $e->getMessage();
-        $messageType = 'danger';
+        $_SESSION['message'] = "Error: " . $e->getMessage();
+        $_SESSION['messageType'] = 'danger';
     }
+    redirect("?page=vote");
 }
 
 function handleSettingsUpdate($pdo) {
-    global $message, $messageType;
-    
     $start = $_POST['start'] ?? '';
     $end = $_POST['end'] ?? '';
     $status = $_POST['status'] ?? 'inactive';
     
     if (strtotime($end) <= strtotime($start)) {
-        $message = "End time must be after start time!";
-        $messageType = 'danger';
+        $_SESSION['message'] = "End time must be after start time!";
+        $_SESSION['messageType'] = 'danger';
+        redirect("?page=settings");
         return;
     }
     
@@ -566,17 +598,16 @@ function handleSettingsUpdate($pdo) {
         $stmt->execute([$end_datetime, 'voting_end']);
         $stmt->execute([$status, 'voting_status']);
         
-        $message = "Settings updated successfully!";
-        $messageType = 'success';
+        $_SESSION['message'] = "Settings updated successfully!";
+        $_SESSION['messageType'] = 'success';
     } catch(PDOException $e) {
-        $message = "Error: " . $e->getMessage();
-        $messageType = 'danger';
+        $_SESSION['message'] = "Error: " . $e->getMessage();
+        $_SESSION['messageType'] = 'danger';
     }
+    redirect("?page=settings");
 }
 
 function calculateWinners($pdo) {
-    global $message, $messageType;
-    
     try {
         $pdo->beginTransaction();
         
@@ -589,7 +620,7 @@ function calculateWinners($pdo) {
         
         foreach ($positions as $position) {
             $pos_id = $position['position_id'];
-            $max_winners = $position['max_winners'];
+            $max_winners = (int)$position['max_winners'];
             
             // Get top candidates with vote counts using JOIN
             $stmt = $pdo->prepare("
@@ -599,9 +630,9 @@ function calculateWinners($pdo) {
                 WHERE c.position_id = ? 
                 GROUP BY c.candidate_id 
                 ORDER BY vote_count DESC 
-                LIMIT ?
+                LIMIT $max_winners
             ");
-            $stmt->execute([$pos_id, $max_winners]);
+            $stmt->execute([$pos_id]);
             $winners = $stmt->fetchAll();
             
             // Insert winners
@@ -621,18 +652,17 @@ function calculateWinners($pdo) {
         }
         
         $pdo->commit();
-        $message = "Winners calculated successfully!";
-        $messageType = 'success';
+        $_SESSION['message'] = "Winners calculated successfully!";
+        $_SESSION['messageType'] = 'success';
     } catch(PDOException $e) {
         $pdo->rollBack();
-        $message = "Error: " . $e->getMessage();
-        $messageType = 'danger';
+        $_SESSION['message'] = "Error: " . $e->getMessage();
+        $_SESSION['messageType'] = 'danger';
     }
+    redirect("?page=winners");
 }
 
 function resetVotingSession($pdo) {
-    global $message, $messageType;
-    
     try {
         $pdo->beginTransaction();
         
@@ -645,13 +675,14 @@ function resetVotingSession($pdo) {
         $pdo->exec("UPDATE settings SET setting_value = 'active' WHERE setting_key = 'voting_status'");
         
         $pdo->commit();
-        $message = "Voting session reset successfully!";
-        $messageType = 'success';
+        $_SESSION['message'] = "Voting session reset successfully!";
+        $_SESSION['messageType'] = 'success';
     } catch(PDOException $e) {
         $pdo->rollBack();
-        $message = "Error: " . $e->getMessage();
-        $messageType = 'danger';
+        $_SESSION['message'] = "Error: " . $e->getMessage();
+        $_SESSION['messageType'] = 'danger';
     }
+    redirect("?page=admin");
 }
 
 // ============================================================================
@@ -664,6 +695,30 @@ function resetVotingSession($pdo) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voting System</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f4f4f4; }
+        nav { background: #0a2a43; color: #fff; padding: 12px; }
+        nav a { color: #fff; margin-right: 12px; text-decoration: none; font-weight: 600; }
+        nav a:hover { text-decoration: underline; }
+        hr { border: none; border-top: 1px solid #ccc; margin: 0; }
+        .container, .content-wrapper, body > div { padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; background: #fff; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #e5f1fb; }
+        button { padding: 6px 12px; margin: 2px; cursor: pointer; }
+        form.inline, form[style*="display:inline"] { display: inline; }
+        .card-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+        .card { background: #fff; padding: 15px; flex: 1 1 200px; border: 1px solid #ccc; border-radius: 4px; }
+        .message { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .message.success { background: #d1e7dd; color: #0f5132; }
+        .message.danger { background: #f8d7da; color: #842029; }
+        form input[type="text"], form input[type="email"], form input[type="number"], form input[type="password"], form input[type="datetime-local"], form select, form textarea {
+            width: 100%; padding: 6px; margin: 4px 0 10px 0; box-sizing: border-box;
+        }
+        form textarea { resize: vertical; }
+        .section-box { background:#fff; padding:15px; border:1px solid #ccc; border-radius:4px; margin-bottom:20px; }
+        .section-box h5 { margin-top:0; }
+    </style>
 </head>
 <body>
     <div>
@@ -974,20 +1029,20 @@ function resetVotingSession($pdo) {
                 $total = $stmt->fetchColumn();
                 $total_pages = ceil($total / $per_page);
                 
-                $voters = $pdo->prepare("SELECT * FROM users WHERE role = 'voter' AND (full_name LIKE ? OR email LIKE ?) ORDER BY full_name LIMIT ? OFFSET ?");
+                $per_page = (int)$per_page;
+                $offset = (int)$offset;
+                $voters = $pdo->prepare("SELECT * FROM users WHERE role = 'voter' AND (full_name LIKE ? OR email LIKE ?) ORDER BY full_name LIMIT $per_page OFFSET $offset");
                 $voters->bindValue(1, "%$search%", PDO::PARAM_STR);
                 $voters->bindValue(2, "%$search%", PDO::PARAM_STR);
-                $voters->bindValue(3, $per_page, PDO::PARAM_INT);
-                $voters->bindValue(4, $offset, PDO::PARAM_INT);
                 $voters->execute();
                 $voters = $voters->fetchAll();
             } else {
                 $total = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'voter'")->fetchColumn();
                 $total_pages = ceil($total / $per_page);
                 
-                $voters = $pdo->prepare("SELECT * FROM users WHERE role = 'voter' ORDER BY full_name LIMIT ? OFFSET ?");
-                $voters->bindValue(1, $per_page, PDO::PARAM_INT);
-                $voters->bindValue(2, $offset, PDO::PARAM_INT);
+                $per_page = (int)$per_page;
+                $offset = (int)$offset;
+                $voters = $pdo->prepare("SELECT * FROM users WHERE role = 'voter' ORDER BY full_name LIMIT $per_page OFFSET $offset");
                 $voters->execute();
                 $voters = $voters->fetchAll();
             }
@@ -1175,6 +1230,8 @@ function resetVotingSession($pdo) {
                 $total = $stmt->fetchColumn();
                 $total_pages = ceil($total / $per_page);
                 
+                $per_page = (int)$per_page;
+                $offset = (int)$offset;
                 $results = $pdo->prepare("
                     SELECT c.full_name, p.position_name, COUNT(*) AS votes 
                     FROM votes v 
@@ -1183,18 +1240,18 @@ function resetVotingSession($pdo) {
                     WHERE c.full_name LIKE ? OR p.position_name LIKE ?
                     GROUP BY c.candidate_id 
                     ORDER BY p.position_name, votes DESC
-                    LIMIT ? OFFSET ?
+                    LIMIT $per_page OFFSET $offset
                 ");
                 $results->bindValue(1, "%$search%", PDO::PARAM_STR);
                 $results->bindValue(2, "%$search%", PDO::PARAM_STR);
-                $results->bindValue(3, $per_page, PDO::PARAM_INT);
-                $results->bindValue(4, $offset, PDO::PARAM_INT);
                 $results->execute();
                 $results = $results->fetchAll();
             } else {
                 $total = $pdo->query("SELECT COUNT(DISTINCT c.candidate_id) FROM votes v JOIN candidates c ON v.candidate_id = c.candidate_id")->fetchColumn();
                 $total_pages = ceil($total / $per_page);
                 
+                $per_page = (int)$per_page;
+                $offset = (int)$offset;
                 $results = $pdo->prepare("
                     SELECT c.full_name, p.position_name, COUNT(*) AS votes 
                     FROM votes v 
@@ -1202,10 +1259,8 @@ function resetVotingSession($pdo) {
                     JOIN positions p ON v.position_id = p.position_id
                     GROUP BY c.candidate_id 
                     ORDER BY p.position_name, votes DESC
-                    LIMIT ? OFFSET ?
+                    LIMIT $per_page OFFSET $offset
                 ");
-                $results->bindValue(1, $per_page, PDO::PARAM_INT);
-                $results->bindValue(2, $offset, PDO::PARAM_INT);
                 $results->execute();
                 $results = $results->fetchAll();
             }
